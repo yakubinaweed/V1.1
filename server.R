@@ -12,6 +12,7 @@ library(shinyWidgets)
 library(bslib)
 library(ggplot2)
 
+# Source the individual server modules
 source("server_main.R")
 source("server_gmm.R")
 source("server_parallel.R")
@@ -19,6 +20,7 @@ source("server_parallel.R")
 server <- function(input, output, session) {
 
   # --- Reactive Values for State Management ---
+  # These reactive values store and manage the state of the application across different tabs.
   data_reactive <- reactiveVal(NULL)
   gmm_uploaded_data_rv <- reactiveVal(NULL)
   gmm_processed_data_rv <- reactiveVal(NULL)
@@ -30,7 +32,7 @@ server <- function(input, output, session) {
   parallel_results_rv <- reactiveVal(list())
   parallel_message_rv <- reactiveVal(list(type = "", text = ""))
 
-  # Renders alert-style messages
+  # Renders an alert-style message UI element based on a reactive value
   renderMessageUI <- function(rv) {
     renderUI({
       msg <- rv()
@@ -47,6 +49,7 @@ server <- function(input, output, session) {
     })
   }
 
+  # Render message UIs for each tab
   output$app_message <- renderMessageUI(message_rv)
   output$main_message <- renderMessageUI(message_rv)
   output$parallel_message <- renderMessageUI(parallel_message_rv)
@@ -60,12 +63,14 @@ server <- function(input, output, session) {
     }
   })
 
+  # Event handler for when a blocked tab is clicked
   observeEvent(input$tab_switch_blocked, {
     if (analysis_running_rv()) {
       message_rv(list(text = "Cannot switch tabs while an analysis is running. Please wait or reset the analysis.", type = "warning"))
     }
   })
 
+  # Call the server logic for each module
   mainServer(input, output, session, data_reactive, selected_dir_reactive, message_rv, analysis_running_rv)
   gmmServer(input, output, session, gmm_uploaded_data_rv, gmm_processed_data_rv, gmm_transformation_details_rv, message_rv, analysis_running_rv)
   parallelServer(input, output, session, parallel_data_rv, parallel_results_rv, parallel_message_rv, analysis_running_rv)
