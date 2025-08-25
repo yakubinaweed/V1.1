@@ -117,9 +117,10 @@ run_single_refiner_analysis <- function(subpopulation, data, col_value, col_age,
       mutate(!!rlang::sym(value_col_name) := as.numeric(!!rlang::sym(value_col_name))) %>%
       filter(!is.na(!!rlang::sym(value_col_name)))
 
+    # Corrected: Set Gender_Standardized to the explicit gender of the subpopulation
     raw_subpopulation_data <- cleaned_data %>%
                                     rename(Age = !!rlang::sym(col_age), Value = !!rlang::sym(col_value)) %>%
-                                    mutate(label = label, Gender_Standardized = filtered_data_for_refiner$Gender_Standardized)
+                                    mutate(label = label, Gender_Standardized = gender)
     
     if (nrow(cleaned_data) == 0) {
       stop(paste("No data found for subpopulation:", label, "after cleaning."))
@@ -625,7 +626,7 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
 
   # Renders a single density plot for all selected subpopulations
   output$single_density_plot <- renderPlot({
-    plot_data <- combined_raw_data_rv()
+    plot_data <- filtered_plot_data_rv()
     results <- parallel_results_rv()
     
     if (is.null(plot_data) || nrow(plot_data) == 0) {
@@ -687,7 +688,7 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
 
   # Renders the grouped box plot
   output$combined_box_plot <- renderPlot({
-    plot_data <- combined_raw_data_rv()
+    plot_data <- filtered_plot_data_rv()
     
     if (is.null(plot_data) || nrow(plot_data) == 0) {
       return(ggplot2::ggplot() + ggplot2::annotate("text", x = 0.5, y = 0.5, label = "No data available for plotting.", size = 6, color = "grey50"))
