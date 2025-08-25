@@ -402,7 +402,7 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
     ui_elements <- tagList(
       ui_elements,
       div(class = "summary-box", h5("Summary Table of Reference Intervals")),
-      renderTable(combined_table_data, striped = TRUE, bordered = TRUE),
+      renderTable(combined_table_data %>% dplyr::select(-label, -age_min, -age_max), striped = TRUE, bordered = TRUE),
       br()
     )
 
