@@ -140,7 +140,6 @@ run_gmm_analysis_on_subset <- function(data_subset, gender_label, value_col_name
     }
 }
 
-
 # =========================================================================
 # MAIN SERVER LOGIC
 # =========================================================================
@@ -263,20 +262,20 @@ gmmServer <- function(input, output, session, gmm_uploaded_data_rv, gmm_processe
     shinyjs::runjs("$('#run_gmm_analysis_btn').text('Analyzing...');")
     session$sendCustomMessage('analysisStatus', TRUE)
 
-    model_names_to_use <- if (input$gmm_model_selection_choice == "Manual Selection") {
-      input$gmm_manual_model
-    } else {
+    model_names_to_use <- if (input$gmm_model_selection_choice == "Auto-select") {
       c("EII", "VII", "EEI", "VEI", "EVI", "VVI", "EEE", "EVE", "VEE", "VVV")
+    } else {
+      input$gmm_manual_model
     }
 
-    g_range_to_use <- if (input$gmm_model_selection_choice == "Manual Selection") {
+    g_range_to_use <- if (input$gmm_model_selection_choice == "Auto-select") {
+      2:10
+    } else {
       if (input$gmm_component_number == "Auto") {
         2:10
       } else {
         2:as.numeric(input$gmm_component_number)
       }
-    } else {
-      2:10
     }
 
     tryCatch({
@@ -561,6 +560,38 @@ gmmServer <- function(input, output, session, gmm_uploaded_data_rv, gmm_processe
                 value_col_name = input$gmm_value_col,
                 age_col_name = input$gmm_age_col)
   })  
+  
+  # A helper function to generate the summary for a given subpopulation
+  generate_subpop_summary <- function(model, plot_data, gender_label, value_col, age_col) {
+    cat(paste0("\n--- ", gender_label, " Subpopulations ---\n"))
+    print(summary(model))
+    num_clusters <- model$G
+    cat("\n")
+    for (i in 1:num_clusters) {
+      cat(paste0("Cluster ", i, ":\n"))
+      cat(paste0("  Proportion: ", round(model$parameters$pro[i], 3), "\n"))
+      
+      cluster_data <- plot_data %>% dplyr::filter(Gender == gender_label, cluster == i)
+      mean_value <- mean(cluster_data$Value, na.rm = TRUE)
+      mean_age <- mean(cluster_data$Age, na.rm = TRUE)
+      sd_value <- sd(cluster_data$Value, na.rm = TRUE)
+      sd_age <- sd(cluster_data$Age, na.rm = TRUE)
+      
+      cat(paste0("  Mean ", value_col, ": ", round(mean_value, 3), "\n"))
+      cat(paste0("  Mean ", age_col, ": ", round(mean_age, 3), "\n"))
+      cat(paste0("  Std Dev ", value_col, ": ", round(sd_value, 3), "\n"))
+      cat(paste0("  Std Dev ", age_col, ": ", round(sd_age, 3), "\n"))
+      
+      if (!is.na(sd_age)) {
+        lower_age <- round(mean_age - 2 * sd_age, 1)
+        upper_age <- round(mean_age + 2 * sd_age, 1)
+        cat(paste0("  Estimated ", age_col, " Range (Mean +/- 2SD): [", max(0, lower_age), " to ", upper_age, "] years\n"))
+      } else {
+        cat(paste0("  Estimated ", age_col, " Range: N/A (Std Dev Age problematic)\n"))
+      }
+      cat("\n")
+    }
+  }
 
   # Renders the GMM summary text
   output$gmm_summary_output_bic <- renderPrint({
@@ -580,104 +611,16 @@ gmmServer <- function(input, output, session, gmm_uploaded_data_rv, gmm_processe
     models <- gmm_models_bic_rv()
     
     if (!is.null(models$combined) && !inherits(models$combined, "try-error")) {
-        cat("\n--- Combined Subpopulations ---\n")
-        
-        print(summary(models$combined))
-
-        num_clusters <- models$combined$G
-        cat("\n")
-        for (i in 1:num_clusters) {
-            cat(paste0("Cluster ", i, ":\n"))
-            cat(paste0("  Proportion: ", round(models$combined$parameters$pro[i], 3), "\n"))
-            
-            cluster_data <- plot_data %>% dplyr::filter(Gender == "Combined", cluster == i)
-            mean_value <- mean(cluster_data$Value, na.rm = TRUE)
-            mean_age <- mean(cluster_data$Age, na.rm = TRUE)
-            sd_value <- sd(cluster_data$Value, na.rm = TRUE)
-            sd_age <- sd(cluster_data$Age, na.rm = TRUE)
-            
-            cat(paste0("  Mean ", input$gmm_value_col, ": ", round(mean_value, 3), "\n"))
-            cat(paste0("  Mean ", input$gmm_age_col, ": ", round(mean_age, 3), "\n"))
-            cat(paste0("  Std Dev ", input$gmm_value_col, ": ", round(sd_value, 3), "\n"))
-            cat(paste0("  Std Dev ", input$gmm_age_col, ": ", round(sd_age, 3), "\n"))
-            
-            if (!is.na(sd_age)) {
-              lower_age <- round(mean_age - 2 * sd_age, 1)
-              upper_age <- round(mean_age + 2 * sd_age, 1)
-              cat(paste0("  Estimated ", input$gmm_age_col, " Range (Mean +/- 2SD): [", max(0, lower_age), " to ", upper_age, "] years\n"))
-            } else {
-              cat(paste0("  Estimated ", input$gmm_age_col, " Range: N/A (Std Dev Age problematic)\n"))
-            }
-            cat("\n")
-        }
+        generate_subpop_summary(models$combined, plot_data, "Combined", input$gmm_value_col, input$gmm_age_col)
     } else {
         if (!is.null(models$male) && !inherits(models$male, "try-error")) {
-            cat("\n--- Male Subpopulations ---\n")
-            
-            print(summary(models$male))
-
-            num_clusters <- models$male$G
-            cat("\n")
-            for (i in 1:num_clusters) {
-                
-                cat(paste0("Cluster ", i, ":\n"))
-                cat(paste0("  Proportion: ", round(models$male$parameters$pro[i], 3), "\n"))
-                
-                male_cluster_data <- plot_data %>% dplyr::filter(Gender == "Male", cluster == i)
-                mean_value <- mean(male_cluster_data$Value, na.rm = TRUE)
-                mean_age <- mean(male_cluster_data$Age, na.rm = TRUE)
-                sd_value <- sd(male_cluster_data$Value, na.rm = TRUE)
-                sd_age <- sd(male_cluster_data$Age, na.rm = TRUE)
-                
-                cat(paste0("  Mean ", input$gmm_value_col, ": ", round(mean_value, 3), "\n"))
-                cat(paste0("  Mean ", input$gmm_age_col, ": ", round(mean_age, 3), "\n"))
-                cat(paste0("  Std Dev ", input$gmm_value_col, ": ", round(sd_value, 3), "\n"))
-                cat(paste0("  Std Dev ", input$gmm_age_col, ": ", round(sd_age, 3), "\n"))
-                
-                if (!is.na(sd_age)) {
-                  lower_age <- round(mean_age - 2 * sd_age, 1)
-                  upper_age <- round(mean_age + 2 * sd_age, 1)
-                  cat(paste0("  Estimated ", input$gmm_age_col, " Range (Mean +/- 2SD): [", max(0, lower_age), " to ", upper_age, "] years\n"))
-                } else {
-                  cat(paste0("  Estimated ", input$gmm_age_col, " Range: N/A (Std Dev Age problematic)\n"))
-                }
-                cat("\n")
-            }
+            generate_subpop_summary(models$male, plot_data, "Male", input$gmm_value_col, input$gmm_age_col)
         } else {
             cat("No male subpopulations detected.\n")
         }
         
         if (!is.null(models$female) && !inherits(models$female, "try-error")) {
-            cat("\n--- Female Subpopulations ---\n")
-            
-            print(summary(models$female))
-
-            num_clusters <- models$female$G
-            cat("\n")
-            for (i in 1:num_clusters) {
-                cat(paste0("Cluster ", i, ":\n"))
-                cat(paste0("  Proportion: ", round(models$female$parameters$pro[i], 3), "\n"))
-                
-                female_cluster_data <- plot_data %>% dplyr::filter(Gender == "Female", cluster == i)
-                mean_value <- mean(female_cluster_data$Value, na.rm = TRUE)
-                mean_age <- mean(female_cluster_data$Age, na.rm = TRUE)
-                sd_value <- sd(female_cluster_data$Value, na.rm = TRUE)
-                sd_age <- sd(female_cluster_data$Age, na.rm = TRUE)
-                
-                cat(paste0("  Mean ", input$gmm_value_col, ": ", round(mean_value, 3), "\n"))
-                cat(paste0("  Mean ", input$gmm_age_col, ": ", round(mean_age, 3), "\n"))
-                cat(paste0("  Std Dev ", input$gmm_value_col, ": ", round(sd_value, 3), "\n"))
-                cat(paste0("  Std Dev ", input$gmm_age_col, ": ", round(sd_age, 3), "\n"))
-                
-                if (!is.na(sd_age)) {
-                  lower_age <- round(mean_age - 2 * sd_age, 1)
-                  upper_age <- round(mean_age + 2 * sd_age, 1)
-                  cat(paste0("  Estimated ", input$gmm_age_col, " Range (Mean +/- 2SD): [", max(0, lower_age), " to ", upper_age, "] years\n"))
-                } else {
-                  cat(paste0("  Estimated ", input$gmm_age_col, " Range: N/A (Std Dev Age problematic)\n"))
-                }
-                cat("\n")
-            }
+            generate_subpop_summary(models$female, plot_data, "Female", input$gmm_value_col, input$gmm_age_col)
         } else {
             cat("No female subpopulations detected.\n")
         }

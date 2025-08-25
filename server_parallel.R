@@ -342,31 +342,33 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
     if (is.null(results) || length(results) == 0) {
       return(NULL)
     }
+    
+    # Filter results based on the gender selection
+    filtered_results <- Filter(function(r) {
+        r$status == "success" && (str_extract(r$label, "^\\w+") %in% input$parallel_gender_filter)
+    }, results)
 
-    table_rows <- list()
-
-    for (result in results) {
-      if (result$status == "success") {
-        new_row <- tibble(
-          Gender = str_extract(result$label, "^\\w+"),
-          `Age Range` = paste0(result$age_min, "-", result$age_max),
-          `CI Lower (Lower)` = round(result$ci_low_low, 3),
-          `RI Lower` = round(result$ri_low_fulldata, 3),
-          `CI Lower (Upper)` = round(result$ci_low_high, 3),
-          `CI Upper (Lower)` = round(result$ci_high_low, 3),
-          `RI Upper` = round(result$ri_high_fulldata, 3),
-          `CI Upper (Upper)` = round(result$ci_high_high, 3)
-        )
-        
-        table_rows[[length(table_rows) + 1]] <- new_row
-      }
+    if (length(filtered_results) == 0) {
+        return(NULL)
     }
 
-    if (length(table_rows) > 0) {
-      bind_rows(table_rows)
-    } else {
-      NULL
-    }
+    table_rows <- lapply(filtered_results, function(result) {
+      tibble(
+        label = result$label,
+        Gender = str_extract(result$label, "^\\w+"),
+        `Age Range` = paste0(result$age_min, "-", result$age_max),
+        age_min = result$age_min,
+        age_max = result$age_max,
+        `CI Lower (Lower)` = round(result$ci_low_low, 3),
+        `RI Lower` = round(result$ri_low_fulldata, 3),
+        `CI Lower (Upper)` = round(result$ci_low_high, 3),
+        `CI Upper (Lower)` = round(result$ci_high_low, 3),
+        `RI Upper` = round(result$ri_high_fulldata, 3),
+        `CI Upper (Upper)` = round(result$ci_high_high, 3)
+      )
+    })
+
+    bind_rows(table_rows)
   })
   
   # Reactive expression to filter and prepare data for all combined plots
@@ -433,16 +435,15 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
 
   # Renders the combined dumbbell plot
   output$combined_dumbbell_plot <- renderPlot({
-    plot_data <- filtered_plot_data_rv()
+    plot_data_summary <- combined_summary_table()
     
-    if (is.null(plot_data) || nrow(plot_data) == 0) {
+    if (is.null(plot_data_summary) || nrow(plot_data_summary) == 0) {
       return(ggplot2::ggplot() + ggplot2::annotate("text", x = 0.5, y = 0.5, label = "No successful reference intervals to plot for the selected genders.", size = 6, color = "grey50"))
     }
-
-    plot_data_summary <- combined_summary_table()
-    if (is.null(plot_data_summary) || nrow(plot_data_summary) == 0) {
-       return(ggplot2::ggplot() + ggplot2::annotate("text", x = 0.5, y = 0.5, label = "No successful reference intervals to plot for the selected genders.", size = 6, color = "grey50"))
-    }
+    
+    # Sort the data by gender and age range to ensure a logical plot order
+    plot_data_summary$label <- factor(plot_data_summary$label, 
+                                     levels = unique(plot_data_summary$label[order(plot_data_summary$Gender, plot_data_summary$age_min)]))
 
     unit_label <- if (!is.null(input$parallel_unit_input) && input$parallel_unit_input != "") {
       paste0(input$parallel_col_value, " [", input$parallel_unit_input, "]")
@@ -452,11 +453,11 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
 
     gender_colors <- c("Male" = "steelblue", "Female" = "darkred", "Combined" = "darkgreen")
 
-    ggplot2::ggplot(plot_data_summary, ggplot2::aes(y = reorder(Gender, age_min))) +
+    ggplot2::ggplot(plot_data_summary, ggplot2::aes(y = label)) +
       ggplot2::geom_segment(ggplot2::aes(x = `CI Lower (Lower)`,
                                         xend = `CI Lower (Upper)`,
-                                        y = reorder(Gender, age_min),
-                                        yend = reorder(Gender, age_min),
+                                        y = label,
+                                        yend = label,
                                         color = Gender),
                             linewidth = 10,
                             alpha = 0.3,
@@ -464,8 +465,8 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
       
       ggplot2::geom_segment(ggplot2::aes(x = `CI Upper (Lower)`,
                                         xend = `CI Upper (Upper)`,
-                                        y = reorder(Gender, age_min),
-                                        yend = reorder(Gender, age_min),
+                                        y = label,
+                                        yend = label,
                                         color = Gender),
                             linewidth = 10,
                             alpha = 0.3,
@@ -504,18 +505,15 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
 
   # Renders the combined RI plot
   output$combined_ri_plot <- renderPlot({
-    plot_data <- filtered_plot_data_rv()
-
-    if (is.null(plot_data) || nrow(plot_data) == 0) {
-      return(ggplot2::ggplot() + ggplot2::annotate("text", x = 0.5, y = 0.5, label = "No successful reference intervals to plot for the selected genders.", size = 6, color = "grey50"))
-    }
-    
     plot_data_summary <- combined_summary_table()
     if (is.null(plot_data_summary) || nrow(plot_data_summary) == 0) {
        return(ggplot2::ggplot() + ggplot2::annotate("text", x = 0.5, y = 0.5, label = "No successful reference intervals to plot for the selected genders.", size = 6, color = "grey50"))
     }
-
-
+    
+    # Sort the data by gender and age range to ensure a logical plot order
+    plot_data_summary$label <- factor(plot_data_summary$label, 
+                                     levels = unique(plot_data_summary$label[order(plot_data_summary$Gender, plot_data_summary$age_min)]))
+    
     unit_label <- if (!is.null(input$parallel_unit_input) && input$parallel_unit_input != "") {
       paste0(input$parallel_col_value, " [", input$parallel_unit_input, "]")
     } else {
@@ -560,7 +558,7 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
     
   # Renders the faceted density plot
   output$combined_density_plot <- renderPlot({
-    plot_data <- combined_raw_data_rv()
+    plot_data <- filtered_plot_data_rv()
     results <- parallel_results_rv()
     
     if (is.null(plot_data) || nrow(plot_data) == 0) {
@@ -806,52 +804,59 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
       cat("No successful reference intervals were found to summarize.\n")
     }
   })
+# =========================================================================
+# DYNAMICALLY RENDER INDIVIDUAL SUBPOPULATION PLOTS AND SUMMARIES
+# =========================================================================
+  # A function to render the plot and summary for a single subpopulation result
+  render_subpop_results <- function(i, result) {
+    output_id_plot <- paste0("parallel_plot_", i)
+    output_id_summary <- paste0("parallel_summary_", i)
+    model <- result$model
+    
+    label_parts <- unlist(strsplit(result$label, " "))
+    gender_part <- label_parts[1]
+    age_range_part <- gsub("[()]", "", label_parts[2])
+    
+    output[[output_id_plot]] <- renderPlot({
+      req(model)
+      
+      value_col_name <- input$parallel_col_value
+      model_type <- switch(result$final_model,
+                           "BoxCox" = " (BoxCox Transformed)",
+                           "modBoxCox" = " (modBoxCox Transformed)")
+      
+      plot_title <- paste0("Estimated Reference Intervals for ", value_col_name, 
+                           model_type, " (Gender: ", gender_part, ", Age: ", age_range_part, ")")
+      
+      xlab_text <- if (!is.null(input$parallel_unit_input) && input$parallel_unit_input != "") {
+        paste0(value_col_name, " ", "[", input$parallel_unit_input, "]")
+      } else {
+        value_col_name
+      }
+      
+      plot(model, showCI = TRUE, RIperc = c(0.025, 0.975), showPathol = FALSE,
+           title = plot_title,
+           xlab = xlab_text)
+    })
 
-  # Dynamic rendering of plots and summaries in the main session
+    output[[output_id_summary]] <- renderPrint({
+        req(model)
+        cat("--- RefineR Summary for ", input$parallel_col_value, " (Gender: ", gender_part, ", Age: ", age_range_part, ") ---\n")
+        cat(paste0("Note: ", result$removed_rows, " rows were removed due to missing or invalid data.\n"))
+        print(model)
+    })
+  }
+
+  # Main observer to trigger the rendering of all individual results
   observe({
     results <- parallel_results_rv()
     if (length(results) > 0) {
-      lapply(seq_along(results), function(i) {
+      for (i in seq_along(results)) {
         result <- results[[i]]
         if (result$status == "success") {
-          output_id_plot <- paste0("parallel_plot_", i)
-          output_id_summary <- paste0("parallel_summary_", i)
-          model <- result$model
-          
-          label_parts <- unlist(strsplit(result$label, " "))
-          gender_part <- label_parts[1]
-          age_range_part <- gsub("[()]", "", label_parts[2])
-          
-          output[[output_id_plot]] <- renderPlot({
-            req(model)
-            
-            value_col_name <- input$parallel_col_value
-            model_type <- switch(result$final_model,
-                                 "BoxCox" = " (BoxCox Transformed)",
-                                 "modBoxCox" = " (modBoxCox Transformed)")
-            
-            plot_title <- paste0("Estimated Reference Intervals for ", value_col_name, 
-                                 model_type, " (Gender: ", gender_part, ", Age: ", age_range_part, ")")
-            
-            xlab_text <- if (!is.null(input$parallel_unit_input) && input$parallel_unit_input != "") {
-              paste0(value_col_name, " ", "[", input$parallel_unit_input, "]")
-            } else {
-              value_col_name
-            }
-            
-            plot(model, showCI = TRUE, RIperc = c(0.025, 0.975), showPathol = FALSE,
-                 title = plot_title,
-                 xlab = xlab_text)
-          })
-
-          output[[output_id_summary]] <- renderPrint({
-              req(model)
-              cat("--- RefineR Summary for ", input$parallel_col_value, " (Gender: ", gender_part, ", Age: ", age_range_part, ") ---\n")
-              cat(paste0("Note: ", result$removed_rows, " rows were removed due to missing or invalid data.\n"))
-              print(model)
-          })
+          render_subpop_results(i, result)
         }
-      })
+      }
     }
   })
 }
