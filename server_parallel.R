@@ -191,6 +191,7 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
   
   # Reactive value to store all raw data from successful analyses
   combined_raw_data_rv <- reactiveVal(tibble())
+  parallel_analysis_time_rv <- reactiveVal(NULL)
   
   # Observer for file upload, updating column selectors
   observeEvent(input$parallel_file, {
@@ -242,6 +243,7 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
     shinyjs::disable("run_parallel_btn")
     shinyjs::runjs("$('#run_parallel_btn').text('Analyzing...');")
     session$sendCustomMessage('analysisStatus', TRUE)
+    parallel_analysis_time_rv(Sys.time())
 
     # Stage 2: Attempt to set up the future plan and run the parallel analysis
     results_list <- NULL
@@ -310,6 +312,7 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
       # Clear out any potential partial results to avoid downstream errors
       parallel_results_rv(list())
       combined_raw_data_rv(tibble())
+      parallel_analysis_time_rv(NULL)
       
     }, finally = {
       # This block runs regardless of success or failure to clean up the UI
@@ -326,6 +329,7 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
     parallel_results_rv(list())
     combined_raw_data_rv(tibble())
     parallel_message_rv(list(type = "", text = ""))
+    parallel_analysis_time_rv(NULL)
     shinyjs::reset("parallel_file")
     updateSelectInput(session, "parallel_col_value", choices = c("None" = ""), selected = "")
     updateSelectInput(session, "parallel_col_age", choices = c("None" = ""), selected = "")
@@ -860,4 +864,33 @@ parallelServer <- function(input, output, session, parallel_data_rv, parallel_re
       }
     }
   })
+
+  # PDF report download handler
+  output$download_parallel_report <- downloadHandler(
+    filename = function() {
+      paste0("parallel_analysis_report-", Sys.Date(), ".pdf")
+    },
+    content = function(file) {
+      req(parallel_results_rv(), combined_raw_data_rv())
+
+      inputs <- reactiveValuesToList(input)
+      outputs <- list(
+        combined_summary = combined_summary_table(),
+        raw_data = combined_raw_data_rv(),
+        results = parallel_results_rv(),
+        gender_filter = inputs$parallel_gender_filter
+      )
+
+      params_to_pass <- list(
+        tab_name = "Parallel Analysis",
+        analysis_time = parallel_analysis_time_rv(),
+        download_time = Sys.time(),
+        inputs = inputs,
+        outputs = outputs
+      )
+
+      rmarkdown::render("report_template.Rmd", output_file = file, params = params_to_pass,
+                        envir = new.env(parent = globalenv()))
+    }
+  )
 }

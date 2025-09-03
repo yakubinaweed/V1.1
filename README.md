@@ -66,6 +66,7 @@ We've integrated cutting-edge methods to ensure you get the most reliable result
 * **Select:** Tell the app which columns contain your values, age, and gender, and select your settings.
 * **Press Analyze:** Click the button to start the analysis.
 * **Review:** Dive into the plots and summaries to understand your results.
+* **Export:** Click "Download Report" to save a PDF of your analysis, including all inputs and outputs, for your records.
 
 ---
 

@@ -80,6 +80,7 @@ mainServer <- function(input, output, session, data_reactive, selected_dir_react
   # Reactive values to hold the model and plot title
   refiner_model_rv <- reactiveVal(NULL)
   plot_title_rv <- reactiveVal("")
+  analysis_time_rv <- reactiveVal(NULL)
 
   # Helper function to guess column names
   guess_column <- function(cols_available, common_names) {
@@ -118,6 +119,7 @@ mainServer <- function(input, output, session, data_reactive, selected_dir_react
     data_reactive(NULL)
     refiner_model_rv(NULL)
     plot_title_rv("")
+    analysis_time_rv(NULL)
     message_rv(list(type = "", text = ""))
 
     updateSelectInput(session, "col_value", choices = c("None" = ""), selected = "")
@@ -225,6 +227,7 @@ mainServer <- function(input, output, session, data_reactive, selected_dir_react
       }
 
       refiner_model_rv(refiner_model)
+      analysis_time_rv(Sys.time())
 
       gender_text <- if (isolate(input$col_gender) == "") "Combined" else paste0("Gender: ", isolate(input$gender_choice))
 
@@ -257,6 +260,7 @@ mainServer <- function(input, output, session, data_reactive, selected_dir_react
       error_message <- paste("Analysis Error:", e$message)
       message_rv(list(text = error_message, type = "danger"))
       refiner_model_rv(NULL) # Set to NULL to clear plot and summary
+      analysis_time_rv(NULL)
       print(error_message)
     }, finally = {
       analysis_running_rv(FALSE)
@@ -292,4 +296,39 @@ mainServer <- function(input, output, session, data_reactive, selected_dir_react
                           sprintf("%s [%s]", input$col_value, input$unit_input),
                           input$ref_low, input$ref_high)
   })
+
+  # PDF report download handler
+  output$download_main_report <- downloadHandler(
+    filename = function() {
+      paste0("main_analysis_report-", Sys.Date(), ".pdf")
+    },
+    content = function(file) {
+      req(refiner_model_rv())
+      
+      # Get all relevant inputs and outputs
+      inputs <- reactiveValuesToList(input)
+      outputs <- list(
+        model = refiner_model_rv(),
+        removed_rows = filtered_data_reactive()$removed_rows
+      )
+
+      # Create a list of parameters to pass to the R Markdown template
+      params_to_pass <- list(
+        tab_name = "Main Analysis",
+        analysis_time = analysis_time_rv(),
+        download_time = Sys.time(),
+        inputs = inputs,
+        outputs = outputs,
+        plot_fn = function() {
+          generate_refiner_plot(refiner_model_rv(), plot_title_rv(),
+                                sprintf("%s [%s]", inputs$col_value, inputs$unit_input),
+                                inputs$ref_low, inputs$ref_high)
+        }
+      )
+
+      # Render the R Markdown template
+      rmarkdown::render("report_template.Rmd", output_file = file, params = params_to_pass,
+                        envir = new.env(parent = globalenv()))
+    }
+  )
 }

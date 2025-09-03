@@ -148,6 +148,7 @@ gmmServer <- function(input, output, session, gmm_uploaded_data_rv, gmm_processe
 
   # Reactive value to hold models for BIC criterion
   gmm_models_bic_rv <- reactiveVal(list(male = NULL, female = NULL))
+  gmm_analysis_time_rv <- reactiveVal(NULL)
 
   # Helper function to guess column names
   guess_column <- function(cols_available, common_names) {
@@ -443,6 +444,7 @@ gmmServer <- function(input, output, session, gmm_uploaded_data_rv, gmm_processe
           male_value_transformed = male_value_transformed_flag, 
           female_value_transformed = female_value_transformed_flag
         ))
+        gmm_analysis_time_rv(Sys.time())
   
         if (nrow(combined_clustered_data) > 0) {
           gmm_processed_data_rv(list(bic = combined_clustered_data, removed_rows = removed_rows_count))
@@ -457,6 +459,7 @@ gmmServer <- function(input, output, session, gmm_uploaded_data_rv, gmm_processe
     }, error = function(e) {
       message_rv(list(text = paste("Analysis Error:", e$message), type = "danger"))
       gmm_processed_data_rv(NULL)
+      gmm_analysis_time_rv(NULL)
     }, finally = {
       analysis_running_rv(FALSE)
       shinyjs::enable("run_gmm_analysis_btn")
@@ -472,6 +475,7 @@ gmmServer <- function(input, output, session, gmm_uploaded_data_rv, gmm_processe
     gmm_processed_data_rv(NULL)
     gmm_transformation_details_rv(list(male_value_transformed = FALSE, female_value_transformed = FALSE))
     gmm_models_bic_rv(list(male = NULL, female = NULL))
+    gmm_analysis_time_rv(NULL)
     shinyjs::reset("gmm_file_upload")
     message_rv(list(text = "GMM data and results reset.", type = "info"))
     
@@ -630,4 +634,59 @@ gmmServer <- function(input, output, session, gmm_uploaded_data_rv, gmm_processe
       cat("\nNote: ", input$gmm_value_col, " values were transformed (Yeo-Johnson) for GMM input due to skewness. Reported ", input$gmm_value_col, " values are original.\n")
     }
   })
+
+  # PDF report download handler
+  output$download_gmm_report <- downloadHandler(
+    filename = function() {
+      paste0("gmm_analysis_report-", Sys.Date(), ".pdf")
+    },
+    content = function(file) {
+      req(gmm_processed_data_rv())
+
+      inputs <- reactiveValuesToList(input)
+      outputs <- list(
+        removed_rows = gmm_processed_data_rv()$removed_rows
+      )
+      
+      params_to_pass <- list(
+        tab_name = "Subpopulation Detection (GMM)",
+        analysis_time = gmm_analysis_time_rv(),
+        download_time = Sys.time(),
+        inputs = inputs,
+        outputs = outputs,
+        models = gmm_models_bic_rv(),
+        plot_bic_fn = function() {
+          models <- gmm_models_bic_rv()
+          old_par <- par(no.readonly = TRUE)
+          on.exit(par(old_par))
+          par(mar = c(5.1, 4.1, 1.1, 2.1), mgp = c(2.5, 1, 0))
+          if (!is.null(models$combined)) {
+              plot(models$combined, what = "BIC", main = paste0("BIC Plot for ", inputs$gmm_value_col, " and ", inputs$gmm_age_col, " (Combined)"))
+          } else if (!is.null(models$male) || !is.null(models$female)) {
+              par(mfrow = c(1, 2))
+              if (!is.null(models$male)) {
+                  plot(models$male, what = "BIC", main = paste0("BIC Plot for ", inputs$gmm_value_col, " and ", inputs$gmm_age_col, " (Male)"))
+              } else {
+                  plot.new()
+                  text(0.5, 0.5, "Male GMM model not generated.")
+              }
+              if (!is.null(models$female)) {
+                  plot(models$female, what = "BIC", main = paste0("BIC Plot for ", inputs$gmm_value_col, " and ", inputs$gmm_age_col, " (Female)"))
+              } else {
+                  plot.new()
+                  text(0.5, 0.5, "Female GMM model not generated.")
+              }
+              par(mfrow = c(1, 1))
+          }
+        },
+        plot_clustered_fn = function() {
+          plot_data <- gmm_processed_data_rv()$bic
+          plot_value_age(plot_data, inputs$gmm_value_col, inputs$gmm_age_col)
+        }
+      )
+
+      rmarkdown::render("report_template.Rmd", output_file = file, params = params_to_pass,
+                        envir = new.env(parent = globalenv()))
+    }
+  )
 }

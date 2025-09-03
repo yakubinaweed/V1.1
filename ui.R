@@ -103,7 +103,8 @@ ui <- navbarPage(
         hr(),
         numericInput("ref_low", "Reference Lower Limit:", value = NA),
         numericInput("ref_high", "Reference Upper Limit:", value = NA),
-        textInput(inputId = "unit_input", label = "Unit of Measurement", value = "mmol/L", placeholder = "ex. g/L")
+        textInput(inputId = "unit_input", label = "Unit of Measurement", value = "mmol/L", placeholder = "ex. g/L"),
+        downloadButton("download_main_report", "Download Report", class = "btn-success", style = "width:100%; margin-top: 15px;")
       ),
       mainPanel(
         plotOutput("result_plot"),
@@ -157,7 +158,8 @@ ui <- navbarPage(
             actionButton("reset_gmm_analysis_btn", "Reset File", class = "btn-secondary"),
             div(style = "margin-top: 15px;", uiOutput("app_message"))
           )
-        )
+        ),
+        downloadButton("download_gmm_report", "Download Report", class = "btn-success", style = "width:100%; margin-top: 15px;")
       ),
       mainPanel(
         uiOutput("gmm_results_ui")
@@ -228,7 +230,8 @@ ui <- navbarPage(
         div(style = "margin-top: 15px;", uiOutput("parallel_message")),
         hr(),
         numericInput("cores", "Number of Cores:", value = 1, min = 1),
-        textInput(inputId = "parallel_unit_input", label = "Unit of Measurement", value = "", placeholder = "ex. g/L")
+        textInput(inputId = "parallel_unit_input", label = "Unit of Measurement", value = "", placeholder = "ex. g/L"),
+        downloadButton("download_parallel_report", "Download Report", class = "btn-success", style = "width:100%; margin-top: 15px;")
       ),
       mainPanel(
         tabsetPanel(

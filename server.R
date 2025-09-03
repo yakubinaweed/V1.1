@@ -11,6 +11,20 @@ library(shinyFiles)
 library(shinyWidgets)
 library(bslib)
 library(ggplot2)
+library(rmarkdown)
+library(sysfonts)
+library(showtext)
+
+# Add Google font for PDF rendering
+tryCatch({
+  font_add_google("Inter", "inter")
+  font_add_google("Rethink Sans", "rethink_sans")
+  showtext_auto()
+}, error = function(e) {
+  message("Error loading Google Fonts: ", e$message)
+  message("Proceeding with default fonts.")
+})
+
 
 # Source the individual server modules
 source("server_main.R")
