@@ -642,51 +642,67 @@ gmmServer <- function(input, output, session, gmm_uploaded_data_rv, gmm_processe
     },
     content = function(file) {
       req(gmm_processed_data_rv())
-
-      inputs <- reactiveValuesToList(input)
-      outputs <- list(
-        removed_rows = gmm_processed_data_rv()$removed_rows
-      )
       
-      params_to_pass <- list(
-        tab_name = "Subpopulation Detection (GMM)",
-        analysis_time = gmm_analysis_time_rv(),
-        download_time = Sys.time(),
-        inputs = inputs,
-        outputs = outputs,
-        models = gmm_models_bic_rv(),
-        plot_bic_fn = function() {
-          models <- gmm_models_bic_rv()
-          old_par <- par(no.readonly = TRUE)
-          on.exit(par(old_par))
-          par(mar = c(5.1, 4.1, 1.1, 2.1), mgp = c(2.5, 1, 0))
-          if (!is.null(models$combined)) {
-              plot(models$combined, what = "BIC", main = paste0("BIC Plot for ", inputs$gmm_value_col, " and ", inputs$gmm_age_col, " (Combined)"))
-          } else if (!is.null(models$male) || !is.null(models$female)) {
-              par(mfrow = c(1, 2))
-              if (!is.null(models$male)) {
-                  plot(models$male, what = "BIC", main = paste0("BIC Plot for ", inputs$gmm_value_col, " and ", inputs$gmm_age_col, " (Male)"))
-              } else {
-                  plot.new()
-                  text(0.5, 0.5, "Male GMM model not generated.")
-              }
-              if (!is.null(models$female)) {
-                  plot(models$female, what = "BIC", main = paste0("BIC Plot for ", inputs$gmm_value_col, " and ", inputs$gmm_age_col, " (Female)"))
-              } else {
-                  plot.new()
-                  text(0.5, 0.5, "Female GMM model not generated.")
-              }
-              par(mfrow = c(1, 1))
-          }
-        },
-        plot_clustered_fn = function() {
-          plot_data <- gmm_processed_data_rv()$bic
-          plot_value_age(plot_data, inputs$gmm_value_col, inputs$gmm_age_col)
-        }
-      )
+      tryCatch({
+        # Pre-format date and time strings for LaTeX compatibility
+        formatted_analysis_date <- format(gmm_analysis_time_rv(), "%Y-%m-%d")
+        formatted_analysis_time <- format(gmm_analysis_time_rv(), "%H:%M:%S")
+        formatted_download_date <- format(Sys.time(), "%Y-%m-%d")
+        formatted_download_time <- format(Sys.time(), "%H:%M:%S")
 
-      rmarkdown::render("report_template.Rmd", output_file = file, params = params_to_pass,
-                        envir = new.env(parent = globalenv()))
+        inputs <- reactiveValuesToList(input)
+        outputs <- list(
+          removed_rows = gmm_processed_data_rv()$removed_rows
+        )
+        
+        params_to_pass <- list(
+          formatted_analysis_date = formatted_analysis_date,
+          formatted_analysis_time = formatted_analysis_time,
+          formatted_download_date = formatted_download_date,
+          formatted_download_time = formatted_download_time,
+          inputs = inputs,
+          outputs = outputs,
+          models = gmm_models_bic_rv(),
+          plot_bic_fn = function() {
+            models <- gmm_models_bic_rv()
+            old_par <- par(no.readonly = TRUE)
+            on.exit(par(old_par))
+            par(mar = c(5.1, 4.1, 1.1, 2.1), mgp = c(2.5, 1, 0))
+            if (!is.null(models$combined)) {
+                plot(models$combined, what = "BIC", main = paste0("BIC Plot for ", inputs$gmm_value_col, " and ", inputs$gmm_age_col, " (Combined)"))
+            } else if (!is.null(models$male) || !is.null(models$female)) {
+                par(mfrow = c(1, 2))
+                if (!is.null(models$male)) {
+                    plot(models$male, what = "BIC", main = paste0("BIC Plot for ", inputs$gmm_value_col, " and ", inputs$gmm_age_col, " (Male)"))
+                } else {
+                    plot.new()
+                    text(0.5, 0.5, "Male GMM model not generated.")
+                }
+                if (!is.null(models$female)) {
+                    plot(models$female, what = "BIC", main = paste0("BIC Plot for ", inputs$gmm_value_col, " and ", inputs$gmm_age_col, " (Female)"))
+                } else {
+                    plot.new()
+                    text(0.5, 0.5, "Female GMM model not generated.")
+                }
+                par(mfrow = c(1, 1))
+            }
+          },
+          plot_clustered_fn = function() {
+            plot_data <- gmm_processed_data_rv()$bic
+            plot_value_age(plot_data, inputs$gmm_value_col, inputs$gmm_age_col)
+          }
+        )
+  
+        temp_env <- new.env()
+        temp_env$params <- params_to_pass
+        temp_env$plot_value_age <- plot_value_age # Make sure this function is available
+        
+        rmarkdown::render("report_gmm_template.Rmd", output_file = file, params = params_to_pass,
+                          envir = temp_env, quiet = TRUE)
+      }, error = function(e) {
+        message_rv(list(text = paste("Error generating report:", e$message), type = "danger"))
+        stop(e) # Re-throw the error
+      })
     }
   )
 }

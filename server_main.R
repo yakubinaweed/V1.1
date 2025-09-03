@@ -305,30 +305,66 @@ mainServer <- function(input, output, session, data_reactive, selected_dir_react
     content = function(file) {
       req(refiner_model_rv())
       
-      # Get all relevant inputs and outputs
-      inputs <- reactiveValuesToList(input)
-      outputs <- list(
-        model = refiner_model_rv(),
-        removed_rows = filtered_data_reactive()$removed_rows
-      )
+      tryCatch({
+        # Pre-format date and time strings for LaTeX compatibility
+        formatted_analysis_date <- format(analysis_time_rv(), "%Y-%m-%d")
+        formatted_analysis_time <- format(analysis_time_rv(), "%H:%M:%S")
+        formatted_download_date <- format(Sys.time(), "%Y-%m-%d")
+        formatted_download_time <- format(Sys.time(), "%H:%M:%S")
 
-      # Create a list of parameters to pass to the R Markdown template
-      params_to_pass <- list(
-        tab_name = "Main Analysis",
-        analysis_time = analysis_time_rv(),
-        download_time = Sys.time(),
-        inputs = inputs,
-        outputs = outputs,
-        plot_fn = function() {
-          generate_refiner_plot(refiner_model_rv(), plot_title_rv(),
-                                sprintf("%s [%s]", inputs$col_value, inputs$unit_input),
-                                inputs$ref_low, inputs$ref_high)
-        }
-      )
-
-      # Render the R Markdown template
-      rmarkdown::render("report_template.Rmd", output_file = file, params = params_to_pass,
-                        envir = new.env(parent = globalenv()))
+        # Create a list of parameters to pass to the R Markdown template
+        params_to_pass <- list(
+          formatted_analysis_date = formatted_analysis_date,
+          formatted_analysis_time = formatted_analysis_time,
+          formatted_download_date = formatted_download_date,
+          formatted_download_time = formatted_download_time,
+          inputs = list(
+            col_value = input$col_value,
+            col_age = input$col_age,
+            col_gender = input$col_gender,
+            unit_input = input$unit_input,
+            nbootstrap_speed = input$nbootstrap_speed,
+            model_choice = input$model_choice,
+            gender_choice = input$gender_choice,
+            age_range = input$age_range,
+            ref_low = input$ref_low,
+            ref_high = input$ref_high
+          ),
+          outputs = list(
+            model = refiner_model_rv(),
+            removed_rows = filtered_data_reactive()$removed_rows
+          ),
+          # Pass the plotting function
+          plot_fn = function() {
+            generate_refiner_plot(
+              model = refiner_model_rv(),
+              title = plot_title_rv(),
+              xlab = sprintf("%s [%s]", input$col_value, input$unit_input),
+              ref_low = input$ref_low,
+              ref_high = input$ref_high
+            )
+          }
+        )
+  
+        # Render the R Markdown template
+        # We create a new environment to ensure the rendering is isolated
+        # from the global environment, but has access to the necessary functions
+        # and data via the params list.
+        temp_env <- new.env()
+        temp_env$params <- params_to_pass
+        temp_env$generate_refiner_plot <- generate_refiner_plot
+        
+        rmarkdown::render(
+          "report_main_template.Rmd",
+          output_file = file,
+          params = params_to_pass,
+          envir = temp_env,
+          quiet = TRUE # Suppress verbose output from Rmarkdown
+        )
+      }, error = function(e) {
+        message_rv(list(text = paste("Error generating report:", e$message), type = "danger"))
+        stop(e) # Re-throw the error to stop the download
+      })
     }
   )
 }

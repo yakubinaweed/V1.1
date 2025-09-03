@@ -1,0 +1,88 @@
+title: "VeritasRI Main Analysis Report" author: "VeritasRI Application" output: pdf_document: toc: false number_sections: false params: formatted_analysis_date: null formatted_analysis_time: null formatted_download_date: null formatted_download_time: null inputs: null outputs: null plot_fn: null
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(mclust)
+library(refineR)
+library(rmarkdown)
+library(sysfonts)
+library(showtext)
+library(car)
+library(stringr)
+
+# Ensure fonts are available for rendering
+# This is wrapped in tryCatch to prevent errors in environments without internet access
+tryCatch({
+  showtext_auto()
+  font_add_google("Inter", "inter")
+  font_add_google("Rethink Sans", "rethink_sans")
+}, error = function(e) {
+  message("Error loading Google Fonts: ", e$message)
+  message("Proceeding with default fonts.")
+})
+
+\pagenumbering{gobble}
+\begin{center}
+\Large{\textbf{Main Analysis Report}}
+\end{center}
+
+\vspace{0.5cm}
+\begin{flushright}
+Analysis Date: r params$formatted_analysis_date
+\newline
+Analysis Time: r params$formatted_analysis_time
+\newline
+\vspace{0.2cm}
+Report Download Date: r params$formatted_download_date
+\newline
+Report Download Time: r params$formatted_download_time
+\end{flushright}
+\vspace{1cm}
+
+\section*{User Inputs}
+\begin{itemize}
+\item \textbf{Data File:} r if(!is.null(params$inputs$file_name)) params$inputs$file_name else "N/A"
+\item \textbf{Value Column:} r params$inputs$col_value
+\item \textbf{Age Column:} r params$inputs$col_age
+\item \textbf{Gender Column:} r if(is.null(params$inputs$col_gender) || params$inputs$col_gender == "") "Not Selected" else params$inputs$col_gender
+\item \textbf{Unit of Measurement:} r if(is.null(params$inputs$unit_input) || params$inputs$unit_input == "") "Not specified" else params$inputs$unit_input
+\item \textbf{Number of Bootstraps:} r params$inputs$nbootstrap_speed
+\item \textbf{Transformation Model:} r params$inputs$model_choice
+\item \textbf{Gender Choice:} r params$inputs$gender_choice
+\item \textbf{Age Range:} r paste(params$inputs$age_range[1], "to", params$inputs$age_range[2], "years")
+\item \textbf{Reference Lower Limit:} r if(is.na(params$inputs$ref_low)) "Not specified" else params$inputs$ref_low
+\item \textbf{Reference Upper Limit:} r if(is.na(params$inputs$ref_high)) "Not specified" else params$inputs$ref_high
+\end{itemize}
+
+\newpage
+\section*{Analysis Results}
+
+if (!is.null(params$outputs$removed_rows)) {
+  cat(paste0("Note: ", params$outputs$removed_rows, " rows were removed due to missing or invalid data.\n\n"))
+}
+
+\vspace{0.5cm}
+
+Main Analysis Plot
+if (!is.null(params$plot_fn)) {
+  params$plot_fn()
+} else {
+  plot.new()
+  text(0.5, 0.5, "Plot could not be generated.")
+}
+
+\newpage
+
+Analysis Summary
+if(!is.null(params$outputs$model)) {
+  print(params$outputs$model)
+} else {
+  cat("No analysis model available to summarize.")
+}
+
+\vspace{1cm}
+
+\begin{center}
+\textit{End of Report}
+\end{center}

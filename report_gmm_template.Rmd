@@ -1,0 +1,110 @@
+title: "VeritasRI Subpopulation Detection (GMM) Report" author: "VeritasRI Application" output: pdf_document: toc: false number_sections: false params: formatted_analysis_date: null formatted_analysis_time: null formatted_download_date: null formatted_download_time: null inputs: null outputs: null models: null plot_bic_fn: null plot_clustered_fn: null
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(mclust)
+library(refineR)
+library(rmarkdown)
+library(sysfonts)
+library(showtext)
+library(car)
+library(stringr)
+
+# Ensure fonts are available for rendering
+# This is wrapped in tryCatch to prevent errors in environments without internet access
+tryCatch({
+  showtext_auto()
+  font_add_google("Inter", "inter")
+  font_add_google("Rethink Sans", "rethink_sans")
+}, error = function(e) {
+  message("Error loading Google Fonts: ", e$message)
+  message("Proceeding with default fonts.")
+})
+
+\pagenumbering{gobble}
+\begin{center}
+\Large{\textbf{Subpopulation Detection (GMM) Report}}
+\end{center}
+
+\vspace{0.5cm}
+\begin{flushright}
+Analysis Date: r params$formatted_analysis_date
+\newline
+Analysis Time: r params$formatted_analysis_time
+\newline
+\vspace{0.2cm}
+Report Download Date: r params$formatted_download_date
+\newline
+Report Download Time: r params$formatted_download_time
+\end{flushright}
+\vspace{1cm}
+
+\section*{User Inputs}
+\begin{itemize}
+\item \textbf{Data File:} r if(!is.null(params$inputs$file_name)) params$inputs$file_name else "N/A"
+\item \textbf{Value Column:} r params$inputs$gmm_value_col
+\item \textbf{Age Column:} r params$inputs$gmm_age_col
+\item \textbf{Gender Column:} r if(is.null(params$inputs$gmm_gender_col) || params$inputs$gmm_gender_col == "") "Not Selected" else params$inputs$gmm_gender_col
+\item \textbf{Unit of Measurement:} r if(is.null(params$inputs$unit_input) || params$inputs$unit_input == "") "Not specified" else params$inputs$unit_input
+\item \textbf{Number of Bootstraps:} r params$inputs$nbootstrap_speed
+\item \textbf{Transformation Model:} r params$inputs$model_choice
+\item \textbf{Gender Analysis:} r params$inputs$gmm_gender_choice
+\item \textbf{Model Selection:} r params$inputs$gmm_model_selection_choice
+
+if(params$inputs$gmm_model_selection_choice == "Manual Selection") {
+  cat(paste0("\\item \\textbf{Selected Model:} ", params$inputs$gmm_manual_model, "\n"))
+  cat(paste0("\\item \\textbf{Component Number:} ", params$inputs$gmm_component_number, "\n"))
+}
+
+\end{itemize}
+
+\newpage
+\section*{Analysis Results}
+
+if (!is.null(params$outputs$removed_rows)) {
+  cat(paste0("Note: ", params$outputs$removed_rows, " rows were removed due to missing or invalid data.\n\n"))
+}
+
+BIC Criterion Plots
+if(!is.null(params$plot_bic_fn)) {
+  params$plot_bic_fn()
+} else {
+  plot.new()
+  text(0.5, 0.5, "BIC plot could not be generated.")
+}
+
+\newpage
+
+Clustered Data Plot
+if(!is.null(params$plot_clustered_fn)) {
+  params$plot_clustered_fn()
+} else {
+  plot.new()
+  text(0.5, 0.5, "Clustered data plot could not be generated.")
+}
+
+\newpage
+
+Analysis Summary
+if (!is.null(params$models$combined)) {
+  cat("--- Combined Subpopulations ---\n")
+  print(summary(params$models$combined))
+}
+if (!is.null(params$models$male)) {
+  cat("--- Male Subpopulations ---\n")
+  print(summary(params$models$male))
+}
+if (!is.null(params$models$female)) {
+  cat("--- Female Subpopulations ---\n")
+  print(summary(params$models$female))
+}
+if (is.null(params$models$combined) && is.null(params$models$male) && is.null(params$models$female)) {
+  cat("No GMM analysis models available to summarize.")
+}
+
+\vspace{1cm}
+
+\begin{center}
+\textit{End of Report}
+\end{center}
